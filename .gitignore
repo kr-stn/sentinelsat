@@ -65,4 +65,4 @@ _static
 _templates
 
 #exclude notebook checkpoints
-.ipynb_checkpoints
+.ipynb_checkpoints/
