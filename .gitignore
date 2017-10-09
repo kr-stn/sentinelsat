@@ -63,3 +63,6 @@ target/
 _build
 _static
 _templates
+
+#exclude notebook checkpoints
+.ipynb_checkpoints
