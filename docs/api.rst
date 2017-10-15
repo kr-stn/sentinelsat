@@ -10,6 +10,8 @@ Quickstart
 
   # connect to the API
   from sentinelsat import SentinelAPI, read_geojson, geojson_to_wkt
+  from datetime import date
+
   api = SentinelAPI('user', 'password', 'https://scihub.copernicus.eu/dhus')
 
   # download single scene by known product id
@@ -18,9 +20,9 @@ Quickstart
   # search by polygon, time, and SciHub query keywords
   footprint = geojson_to_wkt(read_geojson('map.geojson'))
   products = api.query(footprint,
-                       '20151219', date(2015, 12, 29),
-                       platformname = 'Sentinel-2',
-                       cloudcoverpercentage = '[0 TO 30]')
+                       date=('20151219', date(2015, 12, 29)),
+                       platformname='Sentinel-2',
+                       cloudcoverpercentage=(0, 30))
 
   # download all results from the search
   api.download_all(products)
@@ -59,14 +61,15 @@ all data types, as long as you pass the ``id`` to the download function.
 
   # connect to the API
   from sentinelsat import SentinelAPI, read_geojson, geojson_to_wkt
+  from datetime import date
 
   api = SentinelAPI('user', 'password', 'https://scihub.copernicus.eu/dhus')
 
   # search by polygon, time, and SciHub query keywords
   footprint = geojson_to_wkt(read_geojson('map.geojson'))
   products = api.query(footprint,
-                       '20151219', date(2015, 12, 29),
-                       platformname = 'Sentinel-2')
+                       date=('20151219', date(2015, 12, 29)),
+                       platformname='Sentinel-2')
 
   # convert to Pandas DataFrame
   products_df = api.to_dataframe(products)
@@ -255,6 +258,44 @@ or add a custom handler for ``sentinelsat`` (as implemented in ``cli.py``)
   h.setFormatter(fmt)
   logger.addHandler(h)
 
+More Examples
+-------------
+
+Search Sentinel 2 by tile
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To search for recent Sentinel 2 imagery by MGRS tile, use the `tileid` parameter:
+
+.. code-block:: python
+
+  from collections import OrderedDict
+  from sentinelsat import SentinelAPI
+
+  api = SentinelAPI('user', 'password')
+
+  tiles = ['33VUC', '33UUB']
+
+  query_kwargs = {
+          'platformname': 'Sentinel-2',
+          'producttype': 'S2MSI1C',
+          'date': ('NOW-14DAYS', 'NOW')}
+
+  products = OrderedDict()
+  for tile in tiles:
+      kw = query_kwargs.copy()
+      kw['tileid'] = tile  # products after 2017-03-31
+      pp = api.query(**kw)
+      products.update(pp)
+
+  api.download_all(products)
+
+NB: The `tileid` parameter only works for products from April 2017 onward due to
+missing metadata in SciHub's DHuS catalogue. Before that, but only from
+December 2016 onward (i.e. for single-tile products), you can use a `filename` pattern instead:
+
+.. code-block:: python
+
+  kw['filename'] = '*_T{}_*'.format(tile)  # products after 2016-12-01
 
 API
 ---

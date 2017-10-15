@@ -10,8 +10,8 @@ sentinelsat
 .. image:: https://codecov.io/gh/sentinelsat/sentinelsat/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/sentinelsat/sentinelsat
 
-.. image:: https://readthedocs.org/projects/sentinelsat/badge/?version=master
-    :target: http://sentinelsat.readthedocs.io/en/master/?badge=master
+.. image:: https://readthedocs.org/projects/sentinelsat/badge/?version=stable
+    :target: http://sentinelsat.readthedocs.io/en/stable/?badge=stable
     :alt: Documentation
 
 .. image:: https://img.shields.io/badge/gitter-join_chat-1dce73.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4NCjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB4PSIwIiB5PSI1IiBmaWxsPSIjZmZmIiB3aWR0aD0iMSIgaGVpZ2h0PSI1Ii8%2BPHJlY3QgeD0iMiIgeT0iNiIgZmlsbD0iI2ZmZiIgd2lkdGg9IjEiIGhlaWdodD0iNyIvPjxyZWN0IHg9IjQiIHk9IjYiIGZpbGw9IiNmZmYiIHdpZHRoPSIxIiBoZWlnaHQ9IjciLz48cmVjdCB4PSI2IiB5PSI2IiBmaWxsPSIjZmZmIiB3aWR0aD0iMSIgaGVpZ2h0PSI0Ii8%2BPC9zdmc%2B&logoWidth=8
@@ -69,15 +69,17 @@ Python Library
 --------------
 
 .. code-block:: python
+  
+  from sentinelsat.sentinel import SentinelAPI, read_geojson, geojson_to_wkt
+  from datetime import date
 
   # connect to the API
-  from sentinelsat.sentinel import SentinelAPI, read_geojson, geojson_to_wkt
   api = SentinelAPI('user', 'password', 'https://scihub.copernicus.eu/dhus')
 
   # download single scene by known product id
   api.download(<product_id>)
 
-  # search by polygon, time, and SciHub query keywords
+  # search by polygon, time, and Hub query keywords
   footprint = geojson_to_wkt(read_geojson('map.geojson'))
   products = api.query(footprint,
                        date = ('20151219', date(2015, 12, 29)),
@@ -106,14 +108,14 @@ Valid search query keywords can be found at the `Copernicus Open Access Hub docu
 Command Line Interface
 ----------------------
 
-A basic search query consists of a search polygon as well as the username and
+A basic search query consists of a search area geometry as well as the username and
 password to access the Copernicus Open Access Hub.
 
 .. code-block:: bash
 
   sentinelsat -u <user> -p <password> -g <geojson>
 
-Search areas are provided as GeoJSON polygons, which can be created with
+Search areas are provided as GeoJSON files, which can be created with
 `QGIS <http://qgis.org/en/site/>`_ or `geojson.io <http://geojson.io>`_.
 If you do not specify a start and end date only products published in the last
 24 hours will be queried.
@@ -220,7 +222,7 @@ The full documentation is also published at http://sentinelsat.readthedocs.io/.
 Changelog
 =========
 
-See `CHANGELOG <CHANGELOG.rst>`_.
+See `CHANGELOG <CHANGELOG.rst>`_. You can also use Githubs compare view to see the `changes since last release <https://github.com/sentinelsat/sentinelsat/compare/v0.12...master>`_.
 
 Contributors
 ============
