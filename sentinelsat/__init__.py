@@ -1,10 +1,11 @@
-__version__ = "0.14"
+__version__ = "1.1.1"
 
 # Import for backwards-compatibility
 from . import sentinel
 from .exceptions import (
     SentinelAPIError,
-    SentinelAPILTAError,
+    LTAError,
+    LTATriggered,
     ServerError,
     InvalidKeyError,
     QueryLengthError,
@@ -19,3 +20,8 @@ from .sentinel import (
     read_geojson,
     placename_to_wkt,
 )
+from .download import (
+    Downloader,
+    DownloadStatus,
+)
+from .products import all_nodes_filter, make_path_filter, make_size_filter, SentinelProductsAPI

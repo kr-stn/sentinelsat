@@ -1,14 +1,17 @@
+import re
+import threading
 from datetime import datetime
+from functools import reduce
 from os import environ
-from os.path import join, isfile, dirname, abspath, exists
+from os.path import abspath, dirname, exists, isfile, join
 
 import pytest
 import yaml
 from pytest_socket import disable_socket
 from vcr import VCR
 
+import sentinelsat
 from sentinelsat import SentinelAPI, geojson_to_wkt, read_geojson
-from sentinelsat.sentinel import _parse_odata_response
 from .custom_serializer import BinaryContentSerializer
 
 TESTS_DIR = dirname(abspath(__file__))
@@ -27,32 +30,62 @@ def pytest_runtest_setup(item):
         pytest.fail("The test is missing a 'scihub', 'fast' or 'mock_api' marker")
 
 
+def scrub_request(request):
+    for header in ("Authorization", "Set-Cookie", "Cookie"):
+        if header in request.headers:
+            del request.headers[header]
+    return request
+
+
+def scrub_response(response):
+    ignore = {
+        x.lower()
+        for x in [
+            "Authorization",
+            "Set-Cookie",
+            "Cookie",
+            "Date",
+            "Expires",
+            "Transfer-Encoding",
+            "last-modified",
+        ]
+    }
+    for header in list(response["headers"]):
+        if (
+            header.lower() in ignore
+            or header.lower().startswith("access-control")
+            or header.lower().startswith("x-")
+        ):
+            del response["headers"][header]
+    return response
+
+
+def scrub_string(string, replacement=b""):
+    """Scrub a string from a VCR response body string"""
+
+    def before_record_response(response):
+        len_before = len(response["body"]["string"])
+        response["body"]["string"] = re.sub(string, replacement, response["body"]["string"])
+        len_diff = len(response["body"]["string"]) - len_before
+        if "content-length" in response["headers"]:
+            response["headers"]["content-length"] = [
+                str(int(response["headers"]["content-length"][0]) + len_diff)
+            ]
+        return response
+
+    return before_record_response
+
+
+def chain(*funcs):
+    def chained_call(arg):
+        return reduce(lambda x, f: f(x), funcs, arg)
+
+    return chained_call
+
+
 # Configure pytest-vcr
 @pytest.fixture(scope="module")
 def vcr(vcr):
-    def scrub_request(request):
-        for header in ("Authorization", "Set-Cookie", "Cookie"):
-            if header in request.headers:
-                del request.headers[header]
-        return request
-
-    def scrub_response(response):
-        ignore = set(
-            x.lower()
-            for x in [
-                "Authorization",
-                "Set-Cookie",
-                "Cookie",
-                "Date",
-                "Expires",
-                "Transfer-Encoding",
-            ]
-        )
-        for header in list(response["headers"]):
-            if header.lower() in ignore or header.lower().startswith("access-control"):
-                del response["headers"][header]
-        return response
-
     def range_header_matcher(r1, r2):
         return r1.headers.get("Range", "") == r2.headers.get("Range", "")
 
@@ -60,7 +93,14 @@ def vcr(vcr):
     vcr.path_transformer = VCR.ensure_suffix(".yaml")
     vcr.filter_headers = ["Set-Cookie"]
     vcr.before_record_request = scrub_request
-    vcr.before_record_response = scrub_response
+    vcr.before_record_response = chain(
+        scrub_response,
+        scrub_string(rb"Request done in \S+ seconds.", b"Request done in ... seconds."),
+        scrub_string(rb'"updated":"[^"]+"', b'"updated":"..."'),
+        scrub_string(rb'totalResults":"\d{4,}"', b'totalResults":"10000"'),
+        scrub_string(rb"of \d{4,} total results", b"of 10000 total results"),
+        scrub_string(rb"&start=\d{4,}&rows=0", b"&start=10000&rows=0"),
+    )
     vcr.decode_compressed_response = True
     vcr.register_serializer("custom", BinaryContentSerializer(CASSETTE_DIR))
     vcr.serializer = "custom"
@@ -91,7 +131,7 @@ def credentials(request):
 @pytest.fixture(scope="session")
 def api_kwargs(credentials):
     user, password = credentials
-    return dict(user=user, password=password, api_url="https://scihub.copernicus.eu/apihub/")
+    return dict(user=user, password=password, api_url="https://apihub.copernicus.eu/apihub/")
 
 
 @pytest.fixture
@@ -134,6 +174,56 @@ def geojson_path():
 
 
 @pytest.fixture(scope="session")
+def geojson_string():
+    string = """{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -66.26953125,
+              -8.05922962720018
+            ],
+            [
+              -66.26953125,
+              0.7031073524364909
+            ],
+            [
+              -57.30468749999999,
+              0.7031073524364909
+            ],
+            [
+              -57.30468749999999,
+              -8.05922962720018
+            ],
+            [
+              -66.26953125,
+              -8.05922962720018
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}"""
+    return string
+
+
+@pytest.fixture(scope="session")
+def wkt_string():
+    string = (
+        "POLYGON((-78.046875 46.377254205100286,-75.76171874999999 43.32517767999295,-71.279296875 "
+        "46.55886030311717,-78.046875 46.377254205100286))"
+    )
+    return string
+
+
+@pytest.fixture(scope="session")
 def test_wkt(geojson_path):
     return geojson_to_wkt(read_geojson(geojson_path))
 
@@ -158,15 +248,19 @@ def raw_products(api_kwargs, vcr, test_wkt):
 
 
 def _get_smallest(api_kwargs, cassette, online, n=3):
-    api = SentinelAPI(**api_kwargs)
-    url = "{}odata/v1/Products?$format=json&$top={}&$orderby=ContentLength&$filter=Online%20eq%20{}".format(
-        api_kwargs["api_url"], n, "true" if online else "false"
-    )
+    time_range = ("NOW-1MONTH", None) if online else (None, "20170101")
+    odatas = []
     with cassette:
-        r = api.session.get(url)
-    odata = [_parse_odata_response(x) for x in r.json()["d"]["results"]]
-    assert len(odata) == n
-    return odata
+        api = SentinelAPI(**api_kwargs)
+        products = api.query(date=time_range, size="/.+KB/", limit=15)
+        for uuid in products:
+            odata = api.get_product_odata(uuid)
+            if odata["Online"] == online:
+                odatas.append(odata)
+                if len(odatas) == n:
+                    break
+    assert len(odatas) == n
+    return odatas
 
 
 @pytest.fixture(scope="module")
@@ -177,6 +271,29 @@ def smallest_online_products(api_kwargs, vcr):
 @pytest.fixture(scope="module")
 def smallest_archived_products(api_kwargs, vcr):
     return _get_smallest(api_kwargs, vcr.use_cassette("smallest_archived_products"), online=False)
+
+
+@pytest.fixture(scope="module")
+def quicklook_products(api_kwargs, vcr):
+    ids = [
+        "6b126ea4-fe27-440c-9a5c-686f386b7291",
+        "1a9401bc-6986-4707-b38d-f6c29ca58c00",
+        "54e6c4ad-6f4e-4fbf-b163-1719f60bfaeb",
+    ]
+    with vcr.use_cassette("quicklook_products"):
+        api = SentinelAPI(**api_kwargs)
+        odata = [api.get_product_odata(x) for x in ids]
+    return odata
+
+
+@pytest.fixture(scope="module")
+def node_test_products(api_kwargs, vcr):
+    with vcr.use_cassette("node_test_products"):
+        api = SentinelAPI(**api_kwargs)
+        products = api.query(date=("NOW-1MONTH", None), identifier="*IW_GRDH*", limit=3)
+        odatas = [api.get_product_odata(x) for x in products]
+        assert all(info["Online"] for info in odatas)
+    return odatas
 
 
 @pytest.fixture(scope="session")
@@ -192,3 +309,8 @@ def large_query():
         area="POLYGON((0 0,0 10,10 10,10 0,0 0))",
         date=(datetime(2015, 12, 1), datetime(2015, 12, 31)),
     )
+
+
+@pytest.fixture(autouse=True)
+def disable_waiting(monkeypatch):
+    monkeypatch.setattr(sentinelsat.download, "_wait", lambda event, timeout: event.wait(0.001))

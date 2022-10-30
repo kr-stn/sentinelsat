@@ -1,25 +1,21 @@
 sentinelsat
 ===========
 
-.. image:: https://badge.fury.io/py/sentinelsat.svg
-    :target: http://badge.fury.io/py/sentinelsat
-    :alt: PyPI package
-
-.. image:: https://travis-ci.com/sentinelsat/sentinelsat.svg?branch=master
-    :target: https://travis-ci.com/sentinelsat/sentinelsat
-    :alt: Travis-CI
-
-.. image:: https://codecov.io/gh/sentinelsat/sentinelsat/branch/master/graph/badge.svg
-    :target: https://codecov.io/gh/sentinelsat/sentinelsat
-    :alt: codecov.io code coverage
-
 .. image:: https://readthedocs.org/projects/sentinelsat/badge/?version=stable
     :target: http://sentinelsat.readthedocs.io/en/stable/?badge=stable
     :alt: Documentation
 
-.. image:: https://img.shields.io/badge/gitter-join_chat-1dce73.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4NCjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB4PSIwIiB5PSI1IiBmaWxsPSIjZmZmIiB3aWR0aD0iMSIgaGVpZ2h0PSI1Ii8%2BPHJlY3QgeD0iMiIgeT0iNiIgZmlsbD0iI2ZmZiIgd2lkdGg9IjEiIGhlaWdodD0iNyIvPjxyZWN0IHg9IjQiIHk9IjYiIGZpbGw9IiNmZmYiIHdpZHRoPSIxIiBoZWlnaHQ9IjciLz48cmVjdCB4PSI2IiB5PSI2IiBmaWxsPSIjZmZmIiB3aWR0aD0iMSIgaGVpZ2h0PSI0Ii8%2BPC9zdmc%2B&logoWidth=8
-    :target: https://gitter.im/sentinelsat/
-    :alt: gitter.im chat
+.. image:: https://badge.fury.io/py/sentinelsat.svg
+    :target: http://badge.fury.io/py/sentinelsat
+    :alt: PyPI package
+
+.. image:: https://github.com/sentinelsat/sentinelsat/actions/workflows/ci.yaml/badge.svg
+    :target: https://github.com/sentinelsat/sentinelsat/actions
+    :alt: GitHub Actions
+
+.. image:: https://codecov.io/gh/sentinelsat/sentinelsat/branch/main/graph/badge.svg
+    :target: https://codecov.io/gh/sentinelsat/sentinelsat
+    :alt: codecov.io code coverage
 
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.595961.svg
    :target: https://doi.org/10.5281/zenodo.595961
@@ -34,7 +30,7 @@ It offers an easy-to-use command line interface
 
 .. code-block:: bash
 
-  sentinelsat -u <user> -p <password> -g <search_polygon.geojson> --sentinel 2 --cloud 30
+  sentinelsat -u <user> -p <password> --location Berlin --sentinel 2 --cloud 30 --start NOW-1MONTH
 
 and a powerful Python API.
 
@@ -46,7 +42,8 @@ and a powerful Python API.
   footprint = geojson_to_wkt(read_geojson('search_polygon.geojson'))
   products = api.query(footprint,
                        producttype='SLC',
-                       orbitdirection='ASCENDING')
+                       orbitdirection='ASCENDING',
+                       limit=10)
   api.download_all(products)
 
 
@@ -77,7 +74,7 @@ Python Library
   from datetime import date
 
   # connect to the API
-  api = SentinelAPI('user', 'password', 'https://scihub.copernicus.eu/dhus')
+  api = SentinelAPI('user', 'password', 'https://apihub.copernicus.eu/apihub')
 
   # download single scene by known product id
   api.download(<product_id>)
@@ -133,7 +130,7 @@ orbit, for the year 2015.
 
   sentinelsat -u <user> -p <password> -g <search_polygon.geojson> -s 20150101 -e 20151231 -d \
   --producttype SLC -q "orbitdirection=Descending" \
-  --url "https://scihub.copernicus.eu/dhus"
+  --url "https://apihub.copernicus.eu/apihub"
 
 Username, password and DHuS URL can also be set via environment variables for convenience.
 
@@ -142,7 +139,7 @@ Username, password and DHuS URL can also be set via environment variables for co
   # same result as query above
   export DHUS_USER="<user>"
   export DHUS_PASSWORD="<password>"
-  export DHUS_URL="https://scihub.copernicus.eu/dhus"
+  export DHUS_URL="https://apihub.copernicus.eu/apihub"
 
   sentinelsat -g <search_polygon.geojson> -s 20150101 -e 20151231 -d \
   --producttype SLC -q "orbitdirection=Descending"
@@ -163,15 +160,15 @@ Options
    * - 
      - --url
      - TEXT
-     - Define another API URL. Default URL is 'https://scihub.copernicus.eu/apihub/'.
+     - Define another API URL. Default URL is 'https://apihub.copernicus.eu/apihub/'.
    * - -s
      - --start
      - TEXT
-     - Start date of the query in the format YYYYMMDD.
+     - Start date of the query in the format YYYYMMDD or an expression like NOW-1DAY.
    * - -e
      - --end
      - TEXT
-     - End date of the query in the format YYYYMMDD.
+     - End date of the query.
    * - -g
      - --geometry
      - PATH
@@ -179,11 +176,11 @@ Options
    * -  
      - --uuid
      - TEXT
-     - Select a specific product UUID instead of a query. Multiple UUIDs can separated by commas.
+     - Select a specific product UUID. Can be set more than once.
    * -  
      - --name
      - TEXT
-     - Select specific product(s) by filename. Supports wildcards.
+     - Select specific product(s) by filename. Supports wildcards. Can be set more than once.
    * -  
      - --sentinel
      - INT
@@ -212,6 +209,10 @@ Options
      - --download
      -  
      - Download all results of the query.
+   * -
+     - --fail-fast
+     -
+     - Skip all other other downloads if one fails.
    * -  
      - --path
      - PATH
@@ -219,12 +220,33 @@ Options
    * - -q
      - --query
      - TEXT
-     - Extra search keywords you want to use in the query. Separate keywords with comma.
-       Example: 'producttype=GRD,polarisationmode=HH'.
+     - Extra search keywords you want to use in the query.
+       Example: '-q producttype=GRD -q polarisationmode=HH'.
+       Repeated keywords are interpreted as an "or" expression.
    * - -f
      - --footprints
-     -  
-     - Create geojson file search_footprints.geojson with footprints of the query result.
+     - FILENAME
+     - Create a GeoJSON file at the provided path with footprints and metadata of the returned products. Set to '-' for stdout.
+   * - 
+     - --include-pattern
+     - TEXT
+     - Glob pattern to filter files (within each product) to be downloaded.
+   * - 
+     - --exclude-pattern
+     - TEXT
+     - Glob pattern to filter files (within each product) to be excluded from the downloaded.
+   * -  
+     - --timeout
+     - FLOAT
+     - How long to wait for a DataHub response (in seconds, default 60 sec).
+   * -
+     - --gnss
+     -
+     - Query orbit products form the GNSS end-point ("https://scihub.copernicus.eu/gnss").
+   * -
+     - --fmt
+     - TEXT
+     - Specify a custom format to print results. The format string shall be compatible with the Python "Format Specification Mini-Language".
    * -  
      - --info
      -  
@@ -233,6 +255,10 @@ Options
      - --version
      -  
      - Show version number and exit.
+   * - 
+     - --debug
+     -  
+     - Print debug log messages.
    * - -h
      - --help
      -  
@@ -281,7 +307,7 @@ The full documentation is also published at http://sentinelsat.readthedocs.io/.
 Changelog
 =========
 
-See `CHANGELOG <CHANGELOG.rst>`_. You can also use GitHub's compare view to see the `changes in the master branch since last release <https://github.com/sentinelsat/sentinelsat/compare/v0.14...master>`_.
+See `CHANGELOG <CHANGELOG.rst>`_. You can also use GitHub's compare view to see the `changes in the main branch since last release <https://github.com/sentinelsat/sentinelsat/compare/v1.1.1...main>`_.
 
 Contributors
 ============

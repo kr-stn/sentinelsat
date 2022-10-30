@@ -1,5 +1,5 @@
 import re
-from os.path import join
+from pathlib import Path
 
 from vcr.serializers import yamlserializer
 
@@ -16,11 +16,14 @@ class BinaryContentSerializer:
     def deserialize(self, cassette_string):
         cassette_dict = self.base_serializer.deserialize(cassette_string)
         for interaction in cassette_dict["interactions"]:
+            if interaction["request"]["method"] == "HEAD":
+                continue
             response = interaction["response"]
             headers = {k.lower(): v for k, v in response["headers"].items()}
             if "content-range" in headers and "content-disposition" in headers:
                 rg, size, filename = self._parse_headers(headers)
-                with open(join(self.directory, filename), "rb") as f:
+                path = Path(self.directory) / "data" / filename
+                with path.open("rb") as f:
                     f.seek(rg[0])
                     content = f.read(rg[1] - rg[0] + 1)
                 response["body"]["string"] = content
@@ -28,14 +31,20 @@ class BinaryContentSerializer:
 
     def serialize(self, cassette_dict):
         for interaction in cassette_dict["interactions"]:
+            if interaction["request"]["method"] == "HEAD":
+                continue
             response = interaction["response"]
             headers = {k.lower(): v for k, v in response["headers"].items()}
             if "content-range" in headers and "content-disposition" in headers:
                 rg, size, filename = self._parse_headers(headers)
                 content = response["body"]["string"]
-                if rg[0] == 0 and rg[1] + 1 == size:
-                    with open(join(self.directory, filename), "wb") as f:
-                        f.write(content)
+                if hasattr(content, "encode"):
+                    content = content.encode("utf-8")
+                path = Path(self.directory) / "data" / filename
+                mode = "r+b" if path.exists() else "w+b"
+                with path.open(mode) as f:
+                    f.seek(rg[0])
+                    f.write(content)
                 del response["body"]["string"]
         return self.base_serializer.serialize(cassette_dict)
 

@@ -2,6 +2,7 @@
 Handling of GeoJSON, geometries, WKT, etc. GIS-related functionality.
 """
 from datetime import datetime
+import re
 
 import geojson
 import pytest
@@ -27,9 +28,22 @@ def test_get_coordinates(fixture_path):
         "POLYGON((-66.2695 -8.0592,-66.2695 0.7031,"
         "-57.3047 0.7031,-57.3047 -8.0592,-66.2695 -8.0592))"
     )
-    assert geojson_to_wkt(read_geojson(fixture_path("map.geojson"))) == wkt
-    assert geojson_to_wkt(read_geojson(fixture_path("map_z.geojson"))) == wkt
+    wkt_single_collection = (
+        "GEOMETRYCOLLECTION(POLYGON((-66.2695 -8.0592,-66.2695 0.7031,"
+        "-57.3047 0.7031,-57.3047 -8.0592,-66.2695 -8.0592)))"
+    )
+    wkt_collection = (
+        "GEOMETRYCOLLECTION("
+        "POLYGON((9.2065 52.6164,9.8438 51.9849,10.7446 52.5630,"
+        "9.8657 52.9751,9.2065 52.6164)),"
+        "POLYGON((12.6123 52.9354,12.2388 52.4426,13.1396 52.2009,"
+        "13.8647 52.5229,13.3374 52.8691,12.6123 52.9354))"
+        ")"
+    )
+    assert geojson_to_wkt(read_geojson(fixture_path("map.geojson"))) == wkt_single_collection
+    assert geojson_to_wkt(read_geojson(fixture_path("map_z.geojson"))) == wkt_single_collection
     assert geojson_to_wkt(read_geojson(fixture_path("map_nested.geojson"))) == wkt
+    assert geojson_to_wkt(read_geojson(fixture_path("map_collection.geojson"))) == wkt_collection
 
 
 @pytest.mark.vcr
@@ -63,9 +77,11 @@ def test_footprints_s2(products, fixture_path):
 @pytest.mark.vcr
 @pytest.mark.scihub
 def test_placename_to_wkt_valid():
-    place_kwargs = ["florida", "ENVELOPE(-87.634896, -79.974306, 31.000968, 24.396308)"]
     # tests wkt response
-    assert placename_to_wkt(place_kwargs[0])[0] == place_kwargs[1]
+    expected_wkt = "ENVELOPE(-87.63, -79.97, 31.00, 24.39)"
+    wkt = placename_to_wkt("florida")[0]
+    # check only up to two decimal places to ignore irrelevant footprint changes
+    assert re.sub(r"(\.\d\d)\d+", "\\1", wkt) == expected_wkt
 
 
 @pytest.mark.vcr

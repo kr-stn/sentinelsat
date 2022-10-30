@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
 import hashlib
-import sys
 
 import pytest
 import requests
@@ -12,19 +10,26 @@ from sentinelsat.sentinel import _parse_opensearch_response
 
 
 @pytest.mark.fast
-def test_checksumming_progressbars(capsys, fixture_path):
+@pytest.mark.parametrize(
+    "algo_name, algo_constructor",
+    [
+        ("md5", hashlib.md5),
+        ("sha3-256", hashlib.sha3_256),
+    ],
+)
+def test_checksumming_progressbars(capsys, fixture_path, algo_name, algo_constructor):
     api = SentinelAPI("mock_user", "mock_password")
-    testfile_md5 = hashlib.md5()
+    algo = algo_constructor()
     true_path = fixture_path("expected_search_footprints_s1.geojson")
     with open(true_path, "rb") as testfile:
-        testfile_md5.update(testfile.read())
-        real_md5 = testfile_md5.hexdigest()
+        algo.update(testfile.read())
+        real_checksum = algo.hexdigest()
 
-    assert api._md5_compare(true_path, real_md5) is True
+    assert api._checksum_compare(true_path, {algo_name: real_checksum}) is True
     out, err = capsys.readouterr()
     assert "checksumming" in err
     api = SentinelAPI("mock_user", "mock_password", show_progressbars=False)
-    assert api._md5_compare(fixture_path("map.geojson"), real_md5) is False
+    assert api._checksum_compare(fixture_path("map.geojson"), {algo_name: real_checksum}) is False
     out, err = capsys.readouterr()
     assert out == ""
     assert "checksumming" not in err
@@ -32,17 +37,21 @@ def test_checksumming_progressbars(capsys, fixture_path):
 
 @pytest.mark.vcr
 @pytest.mark.scihub
-@pytest.mark.skipif(sys.version_info[0] < 3, reason="ignored for Python 2.7")
 def test_unicode_support(api):
-    test_str = "٩(●̮̮̃•̃)۶:"
+    # DHuS only accepts latin1 charset in the GET params
+    with pytest.raises(UnicodeEncodeError):
+        api.count(raw="٩(●̮̮̃•̃)۶:")
 
+    # check that the allowed non-ASCII chars are at least understood correctly by DHuS
+    test_str = "õäöü\xff("
     with pytest.raises(QuerySyntaxError) as excinfo:
         api.count(raw=test_str)
-    assert test_str == excinfo.value.response.json()["feed"]["opensearch:Query"]["searchTerms"]
+    assert test_str in str(excinfo.value)
 
     with pytest.raises(InvalidKeyError) as excinfo:
         api.get_product_odata(test_str)
     assert test_str in excinfo.value.response.json()["error"]["message"]["value"]
+    assert test_str in str(excinfo.value)
 
 
 @pytest.mark.mock_api
@@ -86,8 +95,8 @@ def test_scihub_unresponsive(small_query):
 def test_get_products_invalid_json(test_wkt):
     api = SentinelAPI("mock_user", "mock_password")
     with requests_mock.mock() as rqst:
-        rqst.post(
-            "https://scihub.copernicus.eu/apihub/search?format=json",
+        rqst.get(
+            "https://apihub.copernicus.eu/apihub/search",
             text="{Invalid JSON response",
             status_code=200,
         )

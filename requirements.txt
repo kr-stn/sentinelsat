@@ -1,7 +1,6 @@
 requests
-click
+click >= 7.1
 html2text
 geojson >= 2
-tqdm
-six
+tqdm >= 4.58
 geomet

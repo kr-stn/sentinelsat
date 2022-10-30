@@ -28,7 +28,7 @@ Alternatively, you can add them to a file `.netrc` in your user home directory.
 
 .. code-block:: text
 
-  machine scihub.copernicus.eu
+  machine apihub.copernicus.eu
   login <user>
   password <password>
 
@@ -57,7 +57,7 @@ orbit for the year 2015.
 
   sentinelsat -u <user> -p <password> -g <search_polygon.geojson> -s 20150101 -e 20151231 -d \
   --producttype SLC -q "orbitdirection=Descending" \
-  --url "https://scihub.copernicus.eu/dhus"
+  --url "https://apihub.copernicus.eu/apihub"
 
 Download a single Sentinel-1 GRDH scene covering Santa Claus Village in Finland
 on Christmas Eve 2015.
@@ -88,6 +88,15 @@ Download all Sentinel-2 scenes published in the last 24 hours.
 
   sentinelsat -u <user> -p <password> -g <search_polygon.geojson> --sentinel 2 -d
 
+Orbit products
+~~~~~~~~~~~~~~
+
+Search precise orbit products ("AUX_POEORB") for Sentinel-1B for a specific date.
+
+.. code-block:: bash
+
+  sentinelsat --gnss -s 20210201 -e 20210202 --producttype AUX_POEORB --query="platformserialidentifier=1B"
+
 Options
 -------
 
@@ -107,7 +116,7 @@ Options
 
 .. option:: --url <api_url>
 
-    Define another API URL. Default is 'https://scihub.copernicus.eu/apihub/'.
+    Define another API URL. Default is 'https://apihub.copernicus.eu/apihub/'.
 
     Can also be set with the :envvar:`DHUS_URL` environment variable.
 
@@ -125,12 +134,12 @@ Options
 
 .. option:: --uuid
 
-    Select a specific product UUID instead of a query. Multiple UUIDs can separated by commas.
+    Select a specific product UUID. Can be used more than once.
 
 .. option:: --name <name>
 
     Select specific product(s) by filename. Supports wildcards, such as ``S1A_IW*20151224*`` to find all Sentinel-1A
-    scenes from 24th of December 2015 without restricting the result to a search area.
+    scenes from 24th of December 2015 without restricting the result to a search area. Can be set more than once.
 
 .. option:: --sentinel <number>
 
@@ -161,21 +170,57 @@ Options
 
     Download all results of the query.
 
+.. option:: --fail-fast
+
+    Skip all other other downloads if one fails.
+
 .. option:: --path <directory>
 
     Set the directory where the files will be saved.
 
 .. option:: -q <query>, --query <query>
 
-    Extra search keywords you want to use in the query. Separate keywords with comma.
+    Extra search keywords you want to use in the query. Repeated keywords get interpreted as an "or" expression.
 
     ESA maintains a `list of valid search keywords <https://scihub.copernicus.eu/userguide/3FullTextSearch>`_ that can be used.
 
-    Example: `producttype=GRD,polarisationmode=HH`.
+    Example: `-q producttype=GRD -q polarisationmode=HH`.
 
-.. option:: -f, --footprints
+.. option:: -f, --footprints <path>
 
-    Create geojson file search_footprints.geojson with footprints of the query result.
+    Create a GeoJSON file at the provided path with footprints
+    and metadata of the returned products. Set to '-' for stdout.
+
+.. option:: --include-pattern
+
+    Glob pattern to filter files (within each product) to be downloaded.
+
+.. option:: --exclude-pattern
+
+    Glob pattern to filter files (within each product) to be excluded
+    from the downloaded.
+
+.. option:: --timeout <seconds>
+
+    How long to wait for a DataHub response (in seconds, default 60 sec).
+
+.. option:: --gnss
+
+    Query orbit products form the GNSS end-point ("https://scihub.copernicus.eu/gnss").
+
+.. option:: --fmt <format string>
+
+    Specify a custom format to print results. The format string shall
+    be compatible with the Python "Format Specification Mini-Language".
+
+    Some common keywords for substitution are:
+      'uuid', 'identifier', 'summary', 'link', 'size', 'platformname', 'producttype',
+      'beginposition', 'instrumentshortname', 'cloudcoverpercentage',
+      'orbitdirection', 'relativeorbitnumber', 'footprint'.
+
+    For a complete set of available keywords see the "properties" output from a relevant query with ``--footprints -`` (and possibly ``--limit 1``) appended.
+
+    Default: "Product {uuid} - {summary}"
 
 .. option:: --info
 
@@ -184,6 +229,10 @@ Options
 .. option:: --version
 
     Show version number and exit.
+
+.. option:: --debug
+
+    Print debug log messages.
 
 .. option:: -h, --help
 
@@ -194,3 +243,5 @@ The options :option:`--sentinel`, :option:`--instrument` and :option:`--productt
 most specific to least specific, i.e. :option:`--producttype` > :option:`--instrument` > :option:`--sentinel`. Only the most specific
 option will be included in the search when multiple ones are given.
 
+Also the :option:`--include-pattern` and :option:`--exclude-patter` options are mutually exclusive.
+If used together the CLI program exists with an error.
